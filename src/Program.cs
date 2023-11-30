@@ -4,6 +4,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureServices(builder.Configuration);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+var urls = builder.Configuration["Kestrel:Endpoints"];
+if (urls != null)
+{
+    builder.WebHost.UseUrls(urls);
+}
 
 var app = builder.Build();
 

@@ -16,6 +16,8 @@ using optimalweb.Models.Account;
 using Microsoft.AspNetCore.Authorization;
 using optimalweb.Services.Interfaces;
 using optimalweb.Extensions;
+using optimalweb.Utils;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace src.Controllers.Account
 {
@@ -48,10 +50,58 @@ namespace src.Controllers.Account
 		{
 			return View("Error!");
 		}
+        [HttpGet]
 		public IActionResult Login()
 		{
 			return View();
 		}
+
+        [HttpPost]
+        public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
+        {
+            returnUrl ??= Url.Content("~/");
+            ViewData["ReturnUrl"] = returnUrl;
+            if (ModelState.IsValid)
+            {
+
+                var result = await _signInManager.PasswordSignInAsync(model.UserNameOrEmail, model.Password, model.RememberMe, lockoutOnFailure: true);
+                // Tìm UserName theo Email, đăng nhập lại
+                if ((!result.Succeeded) && Utils.IsValidEmail(model.UserNameOrEmail))
+                {
+                    var user = await _userManager.FindByEmailAsync(model.UserNameOrEmail);
+                    if (user != null)
+                    {
+                        result = await _signInManager.PasswordSignInAsync(
+                            user.UserName ?? throw new ArgumentNullException(nameof(model.UserNameOrEmail)), 
+                            model.Password, 
+                            model.RememberMe, 
+                            lockoutOnFailure: true);
+                    }
+                }
+
+                if (result.Succeeded)
+                {
+                    _logger.LogInformation(1, "User logged in.");
+                    return LocalRedirect(returnUrl);
+                }
+                if (result.RequiresTwoFactor)
+                {
+                    return RedirectToAction(nameof(SendCode), new { ReturnUrl = returnUrl, RememberMe = model.RememberMe });
+                }
+
+                if (result.IsLockedOut)
+                {
+                    _logger.LogWarning(2, "Tài khoản bị khóa");
+                    return View("Lockout");
+                }
+                else
+                {
+                    ModelState.AddModelError("Không đăng nhập được.");
+                    return View(model);
+                }
+            }
+            return View(model);
+        }
 
         #region "Register"
         [HttpGet]
@@ -60,7 +110,7 @@ namespace src.Controllers.Account
 			return View("Register");
 		}
 		[HttpPost]
-		public async Task<IActionResult> Register(RegisterViewModel model, string returnUrl=null)
+		public async Task<IActionResult> Register(RegisterViewModel model, string? returnUrl =null)
 		{
             returnUrl ??= Url.Content("~/");
             ViewData["ReturnUrl"] = returnUrl;
@@ -87,15 +137,18 @@ namespace src.Controllers.Account
                             },
                         protocol: Request.Scheme);
 
-                    await _sendMailService.SendEmailAsync(model.Email,
-                        "Xác nhận địa chỉ email",
-                        @$"Bạn đã đăng ký tài khoản trên OptimalWeb, 
-                           hãy <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>bấm vào đây</a> 
-                           để kích hoạt tài khoản.");
+                    if (callbackUrl != null)
+                    {
+                        await _sendMailService.SendEmailAsync(model.Email,
+                            "Xác nhận địa chỉ email",
+                            @$"Bạn đã đăng ký tài khoản trên OptimalWeb, 
+                               hãy <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>bấm vào đây</a> 
+                               để kích hoạt tài khoản.");
+                    }
 
                     if (_userManager.Options.SignIn.RequireConfirmedAccount)
                     {
-                        return LocalRedirect(Url.Action(nameof(RegisterConfirmation)));
+                        return LocalRedirect(Url.Action(nameof(RegisterConfirmation))??"/");
                     }
                     else
                     {
@@ -128,11 +181,26 @@ namespace src.Controllers.Account
             var result = await _userManager.ConfirmEmailAsync(user, code);
             return View(result.Succeeded ? "ConfirmEmail" : "ErrorConfirmEmail");
         }
+
         [HttpGet]
         [AllowAnonymous]
         public IActionResult RegisterConfirmation()
         {
             return View();
+        }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> SendCode(string? returnUrl = null, bool rememberMe = false)
+        {
+            var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+            if (user == null)
+            {
+                return View("Error");
+            }
+            var userFactors = await _userManager.GetValidTwoFactorProvidersAsync(user);
+            var factorOptions = userFactors.Select(purpose => new SelectListItem { Text = purpose, Value = purpose }).ToList();
+            return View(new SendCodeViewModel { Providers = factorOptions, ReturnUrl = returnUrl, RememberMe = rememberMe });
         }
     }
 }

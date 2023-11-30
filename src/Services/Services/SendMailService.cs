@@ -1,17 +1,16 @@
 ﻿using MailKit.Security;
 using Microsoft.Extensions.Options;
 using MimeKit;
-using NuGet.Protocol.Plugins;
 using optimalweb.Services.Interfaces;
 
 namespace optimalweb.Services.Services
 {
     public class MailSettings
     {
-        public string Mail { get; set; }
-        public string DisplayName { get; set; }
-        public string Password { get; set; }
-        public string Host { get; set; }
+        public required string Mail { get; set; }
+        public string? DisplayName { get; set; }
+        public required string Password { get; set; }
+        public required string Host { get; set; }
         public int Port { get; set; }
 
     }
@@ -52,7 +51,7 @@ namespace optimalweb.Services.Services
             catch (Exception ex)
             {
                 // Gửi mail thất bại, nội dung email sẽ lưu vào thư mục mailssave
-                System.IO.Directory.CreateDirectory("mailssave");
+                Directory.CreateDirectory("mailssave");
                 var emailsavefile = string.Format(@"mailssave/{0}.eml", Guid.NewGuid());
                 await message.WriteToAsync(emailsavefile);
 
@@ -71,9 +70,9 @@ namespace optimalweb.Services.Services
         {
             // Cài đặt dịch vụ gửi SMS tại đây
             // 
-            System.IO.Directory.CreateDirectory("smssave");
+            Directory.CreateDirectory("smssave");
             var emailsavefile = string.Format(@"smssave/{0}-{1}.txt", number, Guid.NewGuid());
-            System.IO.File.WriteAllTextAsync(emailsavefile, message);
+            File.WriteAllTextAsync(emailsavefile, message);
             return Task.FromResult(0);
         }
     }

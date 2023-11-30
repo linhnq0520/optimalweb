@@ -44,7 +44,7 @@ namespace optimalweb.Infrastructure
 
 				options.SignIn.RequireConfirmedEmail = true;
 				options.SignIn.RequireConfirmedPhoneNumber = false;
-				options.SignIn.RequireConfirmedAccount = true;
+				//options.SignIn.RequireConfirmedAccount = true;
 
 			});
 
